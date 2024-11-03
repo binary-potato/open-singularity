@@ -1,13 +1,9 @@
 import streamlit as st
 import requests
 import json
-import sqlite3
 import hashlib
-import os
 import time
-import csv
-from datetime import datetime, timedelta
-from collections import deque
+from datetime import datetime
 import pandas as pd
 
 # Constants
@@ -16,109 +12,65 @@ MAX_RETRIES = 3
 RATE_LIMIT_PERIOD = 60  # in seconds
 MAX_REQUESTS_PER_PERIOD = 20
 
-# Database setup
-def init_db():
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users
-        (username TEXT PRIMARY KEY,
-         password TEXT NOT NULL,
-         conversation_history TEXT DEFAULT '[]')
-    ''')
-    
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS rate_limits
-        (username TEXT PRIMARY KEY,
-         requests JSON NOT NULL)
-    ''')
-    conn.commit()
-    conn.close()
+# Initialize session state for user data storage
+if 'users' not in st.session_state:
+    st.session_state.users = {}
+if 'rate_limits' not in st.session_state:
+    st.session_state.rate_limits = {}
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'username' not in st.session_state:
+    st.session_state.username = None
+if 'temperature' not in st.session_state:
+    st.session_state.temperature = 0.7
+if 'max_tokens' not in st.session_state:
+    st.session_state.max_tokens = 800
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def add_user(username, password):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", 
-                 (username, hash_password(password)))
-        c.execute("INSERT INTO rate_limits (username, requests) VALUES (?, ?)",
-                 (username, '[]'))
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        return False
-    finally:
-        conn.close()
-
-def verify_user(username, password):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT password FROM users WHERE username=?", (username,))
-    result = c.fetchone()
-    conn.close()
-    if result and result[0] == hash_password(password):
+    if username not in st.session_state.users:
+        st.session_state.users[username] = {
+            'password': hash_password(password),
+            'conversation_history': []
+        }
+        st.session_state.rate_limits[username] = []
         return True
     return False
 
-def save_conversation_history(username, history):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("UPDATE users SET conversation_history=? WHERE username=?",
-              (json.dumps(history), username))
-    conn.commit()
-    conn.close()
-
-def load_conversation_history(username):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT conversation_history FROM users WHERE username=?", (username,))
-    result = c.fetchone()
-    conn.close()
-    return json.loads(result[0]) if result and result[0] else []
+def verify_user(username, password):
+    if username in st.session_state.users:
+        return st.session_state.users[username]['password'] == hash_password(password)
+    return False
 
 # Rate limiting
 class RateLimiter:
     def __init__(self, username):
         self.username = username
-        self.requests = self._load_requests()
-
-    def _load_requests(self):
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-        c.execute("SELECT requests FROM rate_limits WHERE username=?", (self.username,))
-        result = c.fetchone()
-        if result:
-            return json.loads(result[0])
-        return []
-
-    def _save_requests(self):
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-        c.execute("UPDATE rate_limits SET requests=? WHERE username=?",
-                 (json.dumps(self.requests), self.username))
-        conn.commit()
-        conn.close()
+        if username not in st.session_state.rate_limits:
+            st.session_state.rate_limits[username] = []
 
     def can_make_request(self):
         current_time = time.time()
-        # Remove old requests
-        self.requests = [req for req in self.requests 
-                        if current_time - req < RATE_LIMIT_PERIOD]
+        requests = st.session_state.rate_limits[self.username]
         
-        if len(self.requests) < MAX_REQUESTS_PER_PERIOD:
-            self.requests.append(current_time)
-            self._save_requests()
+        # Remove old requests
+        requests = [req for req in requests if current_time - req < RATE_LIMIT_PERIOD]
+        st.session_state.rate_limits[self.username] = requests
+        
+        if len(requests) < MAX_REQUESTS_PER_PERIOD:
+            st.session_state.rate_limits[self.username].append(current_time)
             return True
         return False
 
     def time_until_next_request(self):
-        if not self.requests:
+        if not st.session_state.rate_limits[self.username]:
             return 0
         current_time = time.time()
-        oldest_request = min(self.requests)
+        oldest_request = min(st.session_state.rate_limits[self.username])
         return max(0, RATE_LIMIT_PERIOD - (current_time - oldest_request))
 
 # API Call with retry logic
@@ -166,21 +118,6 @@ def llamaapi_call(prompt, username, temperature=0.7, max_tokens=800):
                 return "I apologize, but I encountered an error while processing your request."
             time.sleep(2 ** attempt)  # Exponential backoff
 
-# Initialize database
-init_db()
-
-# Initialize session state
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-if 'username' not in st.session_state:
-    st.session_state.username = None
-if 'temperature' not in st.session_state:
-    st.session_state.temperature = 0.7
-if 'max_tokens' not in st.session_state:
-    st.session_state.max_tokens = 800
-
 # Export conversation history
 def export_conversation(messages, format='csv'):
     if format == 'csv':
@@ -203,7 +140,7 @@ def show_auth_ui():
                 if verify_user(login_username, login_password):
                     st.session_state.logged_in = True
                     st.session_state.username = login_username
-                    st.session_state.messages = load_conversation_history(login_username)
+                    st.session_state.messages = st.session_state.users[login_username]['conversation_history']
                     st.success("Logged in successfully!")
                     st.rerun()
                 else:
@@ -272,7 +209,7 @@ def show_chat_ui():
         
         if st.button("Clear Chat History"):
             st.session_state.messages = []
-            save_conversation_history(st.session_state.username, [])
+            st.session_state.users[st.session_state.username]['conversation_history'] = []
             st.rerun()
             
         if st.button("Logout"):
@@ -304,7 +241,7 @@ def show_chat_ui():
         st.session_state.messages.append({"role": "assistant", "content": response})
         
         # Save conversation history
-        save_conversation_history(st.session_state.username, st.session_state.messages)
+        st.session_state.users[st.session_state.username]['conversation_history'] = st.session_state.messages
 
     # Footer
     st.markdown("---")
