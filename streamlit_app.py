@@ -7,7 +7,7 @@ from datetime import datetime
 import pandas as pd
 
 # Constants
-API_KEY = "LA-54944fad3e444375aecc8601577db76d00dd4a8a12de4624864e0a7c5d5a4e0d"
+API_KEY = "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"
 MAX_RETRIES = 3
 RATE_LIMIT_PERIOD = 60  # in seconds
 MAX_REQUESTS_PER_PERIOD = 20
