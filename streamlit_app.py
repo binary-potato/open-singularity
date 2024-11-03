@@ -1,258 +1,109 @@
 import streamlit as st
-import requests
+import groq
+from typing import List
+import os
+import tempfile
 import json
-import hashlib
-import time
 from datetime import datetime
-import pandas as pd
 
-# Constants
-API_KEY = "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"
-MAX_RETRIES = 3
-RATE_LIMIT_PERIOD = 60  # in seconds
-MAX_REQUESTS_PER_PERIOD = 20
+# Initialize Groq client
+client = groq.Groq(api_key="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")
 
-# Initialize session state for user data storage
-if 'users' not in st.session_state:
-    st.session_state.users = {}
-if 'rate_limits' not in st.session_state:
-    st.session_state.rate_limits = {}
+# Initialize session state
 if 'messages' not in st.session_state:
     st.session_state.messages = []
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-if 'username' not in st.session_state:
-    st.session_state.username = None
-if 'temperature' not in st.session_state:
-    st.session_state.temperature = 0.7
-if 'max_tokens' not in st.session_state:
-    st.session_state.max_tokens = 800
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
 
-def add_user(username, password):
-    if username not in st.session_state.users:
-        st.session_state.users[username] = {
-            'password': hash_password(password),
-            'conversation_history': []
-        }
-        st.session_state.rate_limits[username] = []
-        return True
-    return False
-
-def verify_user(username, password):
-    if username in st.session_state.users:
-        return st.session_state.users[username]['password'] == hash_password(password)
-    return False
-
-# Rate limiting
-class RateLimiter:
-    def __init__(self, username):
-        self.username = username
-        if username not in st.session_state.rate_limits:
-            st.session_state.rate_limits[username] = []
-
-    def can_make_request(self):
-        current_time = time.time()
-        requests = st.session_state.rate_limits[self.username]
-        
-        # Remove old requests
-        requests = [req for req in requests if current_time - req < RATE_LIMIT_PERIOD]
-        st.session_state.rate_limits[self.username] = requests
-        
-        if len(requests) < MAX_REQUESTS_PER_PERIOD:
-            st.session_state.rate_limits[self.username].append(current_time)
-            return True
-        return False
-
-    def time_until_next_request(self):
-        if not st.session_state.rate_limits[self.username]:
-            return 0
-        current_time = time.time()
-        oldest_request = min(st.session_state.rate_limits[self.username])
-        return max(0, RATE_LIMIT_PERIOD - (current_time - oldest_request))
-
-# API Call with retry logic
-def llamaapi_call(prompt, username, temperature=0.7, max_tokens=800):
-    rate_limiter = RateLimiter(username)
-    
-    if not rate_limiter.can_make_request():
-        wait_time = rate_limiter.time_until_next_request()
-        st.warning(f"Rate limit reached. Please wait {int(wait_time)} seconds.")
-        return "Rate limit reached. Please wait a moment before trying again."
-
-    url = "https://api.llamaapi.net/chat"
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
+def save_chat_history():
+    """Save chat history to a JSON file"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    history = {
+        'timestamp': timestamp,
+        'messages': st.session_state.messages
     }
+    st.session_state.chat_history.append(history)
     
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."}
-    ]
-    
-    # Add the conversation history
-    for msg in st.session_state.messages[-5:]:
-        messages.append({"role": msg["role"], "content": msg["content"]})
-    
-    messages.append({"role": "user", "content": prompt})
-    
-    data = {
-        "messages": messages,
-        "stream": False,
-        "max_tokens": max_tokens,
-        "temperature": temperature
-    }
-    
-    for attempt in range(MAX_RETRIES):
-        try:
-            response = requests.post(url, headers=headers, json=data)
-            response.raise_for_status()
-            return response.json()['choices'][0]['message']['content']
-        except requests.exceptions.RequestException as e:
-            if attempt == MAX_RETRIES - 1:
-                st.error(f"API Error: {str(e)}")
-                if hasattr(e.response, 'text'):
-                    st.error(f"API Response: {e.response.text}")
-                return "I apologize, but I encountered an error while processing your request."
-            time.sleep(2 ** attempt)  # Exponential backoff
+    # Save to file
+    with open(f'chat_history_{timestamp}.json', 'w') as f:
+        json.dump(history, f, indent=2)
 
-# Export conversation history
-def export_conversation(messages, format='csv'):
-    if format == 'csv':
-        df = pd.DataFrame(messages)
-        return df.to_csv(index=False).encode('utf-8')
-    else:  # json
-        return json.dumps(messages, indent=2).encode('utf-8')
+def load_chat_history(file):
+    """Load chat history from a JSON file"""
+    content = file.read()
+    history = json.loads(content)
+    return history['messages']
 
-# Authentication UI
-def show_auth_ui():
-    tab1, tab2 = st.tabs(["Login", "Sign Up"])
-    
-    with tab1:
-        st.subheader("Login")
-        login_username = st.text_input("Username", key="login_username")
-        login_password = st.text_input("Password", type="password", key="login_password")
+def process_file(file) -> str:
+    """Process uploaded file and return its content"""
+    with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+        tmp_file.write(file.getvalue())
+        tmp_file.flush()
         
-        if st.button("Login"):
-            if login_username and login_password:
-                if verify_user(login_username, login_password):
-                    st.session_state.logged_in = True
-                    st.session_state.username = login_username
-                    st.session_state.messages = st.session_state.users[login_username]['conversation_history']
-                    st.success("Logged in successfully!")
-                    st.rerun()
-                else:
-                    st.error("Invalid username or password")
-            else:
-                st.warning("Please fill in all fields")
-
-    with tab2:
-        st.subheader("Sign Up")
-        new_username = st.text_input("Username", key="new_username")
-        new_password = st.text_input("Password", type="password", key="new_password")
-        confirm_password = st.text_input("Confirm Password", type="password")
-        
-        if st.button("Sign Up"):
-            if new_username and new_password and confirm_password:
-                if new_password == confirm_password:
-                    if add_user(new_username, new_password):
-                        st.success("Account created successfully! Please login.")
-                    else:
-                        st.error("Username already exists")
-                else:
-                    st.error("Passwords do not match")
-            else:
-                st.warning("Please fill in all fields")
-
-# Main UI
-def show_chat_ui():
-    st.title("🦙 Llama Chatbot")
-    
-    # Sidebar
-    with st.sidebar:
-        st.title("Settings")
-        st.write(f"Logged in as: {st.session_state.username}")
-        
-        # API Parameters
-        st.subheader("API Parameters")
-        st.session_state.temperature = st.slider(
-            "Temperature",
-            min_value=0.1,
-            max_value=1.0,
-            value=st.session_state.temperature,
-            step=0.1,
-            help="Higher values make the output more random, lower values make it more focused and deterministic"
-        )
-        
-        st.session_state.max_tokens = st.slider(
-            "Max Tokens",
-            min_value=100,
-            max_value=2000,
-            value=st.session_state.max_tokens,
-            step=100,
-            help="Maximum length of the response"
-        )
-        
-        # Export options
-        st.subheader("Export Chat History")
-        export_format = st.selectbox("Export Format", ["CSV", "JSON"])
-        if st.button("Export Chat"):
-            file_extension = "csv" if export_format == "CSV" else "json"
-            st.download_button(
-                label="Download Chat History",
-                data=export_conversation(st.session_state.messages, export_format.lower()),
-                file_name=f"chat_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{file_extension}",
-                mime=f"text/{file_extension}"
-            )
-        
-        if st.button("Clear Chat History"):
-            st.session_state.messages = []
-            st.session_state.users[st.session_state.username]['conversation_history'] = []
-            st.rerun()
+        # Read file content based on file type
+        if file.type == "text/plain":
+            with open(tmp_file.name, 'r') as f:
+                content = f.read()
+        else:
+            content = f"File uploaded: {file.name} (type: {file.type})"
             
-        if st.button("Logout"):
-            st.session_state.logged_in = False
-            st.session_state.username = None
-            st.session_state.messages = []
-            st.rerun()
+        os.unlink(tmp_file.name)
+        return content
 
-    # Display chat messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+def get_groq_response(messages: List[dict]) -> str:
+    """Get response from Groq API"""
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=messages,
+            model="mixtral-8x7b-32768",
+            temperature=0.7,
+            max_tokens=1024,
+        )
+        return chat_completion.choices[0].message.content
+    except Exception as e:
+        return f"Error getting response: {str(e)}"
 
-    # Chat input
-    if prompt := st.chat_input("What would you like to ask?"):
-        with st.chat_message("user"):
-            st.write(prompt)
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                response = llamaapi_call(
-                    prompt,
-                    st.session_state.username,
-                    st.session_state.temperature,
-                    st.session_state.max_tokens
-                )
-                st.write(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        
-        # Save conversation history
-        st.session_state.users[st.session_state.username]['conversation_history'] = st.session_state.messages
+# Streamlit UI
+st.title("💬 Chatbot with File Support")
 
-    # Footer
-    st.markdown("---")
-    st.markdown("Made with ❤️ using Streamlit and Llama API")
+# File upload
+uploaded_file = st.file_uploader("Upload a file", type=['txt', 'pdf', 'doc', 'docx'])
+if uploaded_file:
+    file_content = process_file(uploaded_file)
+    st.session_state.messages.append({"role": "user", "content": f"I've uploaded a file with the following content:\n\n{file_content}"})
 
-# Main app logic
-def main():
-    if not st.session_state.logged_in:
-        show_auth_ui()
-    else:
-        show_chat_ui()
+# Load previous chat
+uploaded_history = st.file_uploader("Load previous chat", type=['json'])
+if uploaded_history:
+    st.session_state.messages = load_chat_history(uploaded_history)
+    st.rerun()
 
-if __name__ == "__main__":
-    main()
+# Display chat messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat input
+if prompt := st.chat_input("What would you like to discuss?"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Get assistant response
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            response = get_groq_response(st.session_state.messages)
+            st.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
+# Save chat button
+if st.button("Save Chat History"):
+    save_chat_history()
+    st.success("Chat history saved!")
+
+# Display chat history
+if st.session_state.chat_history:
+    st.subheader("Previous Chats")
+    for history in st.session_state.chat_history:
+        st.write(f"Chat from {history['timestamp']}")
