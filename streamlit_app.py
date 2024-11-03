@@ -1,5 +1,5 @@
 import streamlit as st
-import groq
+from groq import Groq
 from typing import List
 import os
 import tempfile
@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 
 # Initialize Groq client
-client = groq.Groq(api_key="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")
+client = Groq(api_key="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")
 
 # Initialize session state
 if 'messages' not in st.session_state:
@@ -16,24 +16,34 @@ if 'messages' not in st.session_state:
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
-def save_chat_history():
-    """Save chat history to a JSON file"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    history = {
-        'timestamp': timestamp,
-        'messages': st.session_state.messages
-    }
-    st.session_state.chat_history.append(history)
-    
-    # Save to file
-    with open(f'chat_history_{timestamp}.json', 'w') as f:
-        json.dump(history, f, indent=2)
+if 'selected_chat' not in st.session_state:
+    st.session_state.selected_chat = None
 
-def load_chat_history(file):
-    """Load chat history from a JSON file"""
-    content = file.read()
-    history = json.loads(content)
-    return history['messages']
+def save_chat_history():
+    """Save current chat to history"""
+    if st.session_state.messages:  # Only save if there are messages
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        history = {
+            'timestamp': timestamp,
+            'messages': st.session_state.messages.copy()
+        }
+        st.session_state.chat_history.append(history)
+
+def load_chat(timestamp: str):
+    """Load a specific chat from history"""
+    for chat in st.session_state.chat_history:
+        if chat['timestamp'] == timestamp:
+            st.session_state.messages = chat['messages'].copy()
+            st.session_state.selected_chat = timestamp
+            st.rerun()
+
+def new_chat():
+    """Start a new chat"""
+    if st.session_state.messages:  # Save current chat if it exists
+        save_chat_history()
+    st.session_state.messages = []
+    st.session_state.selected_chat = None
+    st.rerun()
 
 def process_file(file) -> str:
     """Process uploaded file and return its content"""
@@ -64,7 +74,27 @@ def get_groq_response(messages: List[dict]) -> str:
     except Exception as e:
         return f"Error getting response: {str(e)}"
 
-# Streamlit UI
+# Sidebar for chat history
+with st.sidebar:
+    st.button("New Chat", on_click=new_chat, key="new_chat")
+    
+    if st.session_state.chat_history:
+        st.header("Chat History")
+        for chat in reversed(st.session_state.chat_history):
+            # Format timestamp for display
+            display_time = datetime.strptime(chat['timestamp'], "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
+            # Calculate preview from first message
+            preview = chat['messages'][0]['content'][:30] + "..." if chat['messages'] else "Empty chat"
+            
+            # Create a unique key for each button based on timestamp
+            if st.button(
+                f"📝 {display_time}\n{preview}",
+                key=chat['timestamp'],
+                help="Click to load this chat"
+            ):
+                load_chat(chat['timestamp'])
+
+# Main chat interface
 st.title("💬 Chatbot with File Support")
 
 # File upload
@@ -73,12 +103,6 @@ if uploaded_file:
     file_content = process_file(uploaded_file)
     st.session_state.messages.append({"role": "user", "content": f"I've uploaded a file with the following content:\n\n{file_content}"})
 
-# Load previous chat
-uploaded_history = st.file_uploader("Load previous chat", type=['json'])
-if uploaded_history:
-    st.session_state.messages = load_chat_history(uploaded_history)
-    st.rerun()
-
 # Display chat messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -86,6 +110,10 @@ for message in st.session_state.messages:
 
 # Chat input
 if prompt := st.chat_input("What would you like to discuss?"):
+    # Save current chat before adding new message if it's not already saved
+    if not st.session_state.selected_chat and st.session_state.messages:
+        save_chat_history()
+    
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -96,14 +124,3 @@ if prompt := st.chat_input("What would you like to discuss?"):
             response = get_groq_response(st.session_state.messages)
             st.markdown(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
-
-# Save chat button
-if st.button("Save Chat History"):
-    save_chat_history()
-    st.success("Chat history saved!")
-
-# Display chat history
-if st.session_state.chat_history:
-    st.subheader("Previous Chats")
-    for history in st.session_state.chat_history:
-        st.write(f"Chat from {history['timestamp']}")
