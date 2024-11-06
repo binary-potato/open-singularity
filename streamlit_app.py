@@ -62,7 +62,7 @@ def process_file(uploaded_file):
         return f"[File uploaded: {uploaded_file.name}]"
     return None
 
-# Function to get chatbot response
+# Function to get botbot response
 def get_bot_response(messages):
     chat_completion = client.chat.completions.create(
         messages=[
@@ -82,7 +82,7 @@ def toggle_file_upload():
 # Streamlit UI
 st.set_page_config(page_title="Chatbot", layout="wide")
 
-# Custom CSS for the file upload button and popup
+# Custom CSS for better UI
 st.markdown("""
 <style>
     .stButton button {
@@ -98,30 +98,45 @@ st.markdown("""
         border-radius: 10px;
         margin: 5px 0;
     }
-    .file-upload-button {
-        position: absolute;
-        right: 60px;
-        bottom: 15px;
-        background: none;
-        border: none;
-        cursor: pointer;
-    }
-    .file-upload-button:hover {
-        opacity: 0.7;
-    }
-    .file-upload-popup {
+    .upload-container {
         position: fixed;
-        bottom: 80px;
+        bottom: 70px;
         right: 20px;
         background: white;
         padding: 20px;
         border-radius: 10px;
         box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        z-index: 1000;
+        max-width: 300px;
+    }
+    .folder-button {
+        position: fixed;
+        bottom: 20px;
+        right: 60px;
+        font-size: 24px;
+        background: none;
+        border: none;
+        cursor: pointer;
+    }
+    .folder-button:hover {
+        opacity: 0.7;
     }
     /* Hide Streamlit's default file uploader label */
     .stFileUploader label {
-        display: none;
+        display: none !important;
+    }
+    /* Custom styles for the upload button */
+    .stButton>button.folder-icon {
+        background: none;
+        border: none;
+        padding: 0;
+        font-size: 24px;
+        position: fixed;
+        bottom: 20px;
+        right: 60px;
+        width: auto;
+    }
+    .stButton>button.folder-icon:hover {
+        opacity: 0.7;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -159,39 +174,34 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# File upload button and popup
-col1, col2 = st.columns([12, 1])
-with col2:
-    st.markdown(
-        f"""
-        <button class="file-upload-button" onclick="document.getElementById('file-upload-popup').style.display='block'">
-            📁
-        </button>
-        """,
-        unsafe_allow_html=True
-    )
-
-# File upload popup
-if st.session_state.show_file_upload:
-    with st.container():
-        st.markdown(
-            """
-            <div id="file-upload-popup" class="file-upload-popup">
-                <h3>Upload File</h3>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        uploaded_file = st.file_uploader("Choose a file", key="file_upload")
-        if st.button("Close"):
-            st.session_state.show_file_upload = False
+# Container for file upload button and popup
+container = st.container()
+with container:
+    # File upload button
+    col1, col2 = st.columns([20, 1])
+    with col2:
+        if st.button("📁", key="folder_button", help="Upload file", type="primary", use_container_width=True):
+            st.session_state.show_file_upload = not st.session_state.show_file_upload
+    
+    # File upload popup
+    if st.session_state.show_file_upload:
+        with st.container():
+            st.markdown('<div class="upload-container">', unsafe_allow_html=True)
+            st.subheader("Upload File")
+            uploaded_file = st.file_uploader("Choose a file", key="file_upload")
+            if st.button("Close", key="close_upload"):
+                st.session_state.show_file_upload = False
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # Chat input
 if prompt := st.chat_input("What's on your mind?"):
     # Process file if uploaded
     file_content = None
-    if 'file_upload' in st.session_state:
+    if 'file_upload' in st.session_state and st.session_state.file_upload is not None:
         file_content = process_file(st.session_state.file_upload)
+        # Clear the uploaded file after processing
+        st.session_state.file_upload = None
+        st.session_state.show_file_upload = False
     
     # Combine prompt with file content if present
     full_prompt = prompt
@@ -214,20 +224,3 @@ if prompt := st.chat_input("What's on your mind?"):
     # Update chat history
     st.session_state.chats[st.session_state.current_chat_id]['messages'] = st.session_state.messages
     save_chat_history()
-
-# JavaScript for handling popup
-st.markdown("""
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const popup = document.getElementById('file-upload-popup');
-        const btn = document.querySelector('.file-upload-button');
-        
-        // Close popup when clicking outside
-        window.onclick = function(event) {
-            if (event.target == popup) {
-                popup.style.display = "none";
-            }
-        }
-    });
-</script>
-""", unsafe_allow_html=True)
