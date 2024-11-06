@@ -21,13 +21,68 @@ if 'messages' not in st.session_state:
 if 'show_file_upload' not in st.session_state:
     st.session_state.show_file_upload = False
 
-# Functions remain the same as before...
-[Previous functions remain unchanged]
+# Function to save chat history
+def save_chat_history():
+    if not os.path.exists('chat_history'):
+        os.makedirs('chat_history')
+    
+    for chat_id, chat_data in st.session_state.chats.items():
+        file_path = f'chat_history/{chat_id}.json'
+        with open(file_path, 'w') as f:
+            json.dump(chat_data, f)
+
+# Function to load chat history
+def load_chat_history():
+    if not os.path.exists('chat_history'):
+        return
+    
+    for file_path in Path('chat_history').glob('*.json'):
+        with open(file_path, 'r') as f:
+            chat_data = json.load(f)
+            chat_id = file_path.stem
+            st.session_state.chats[chat_id] = chat_data
+
+# Function to create new chat
+def create_new_chat():
+    chat_id = str(uuid.uuid4())
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.chats[chat_id] = {
+        'timestamp': timestamp,
+        'messages': []
+    }
+    st.session_state.current_chat_id = chat_id
+    st.session_state.messages = []
+
+# Function to process files
+def process_file(uploaded_file):
+    if uploaded_file is not None:
+        file_contents = uploaded_file.read()
+        if uploaded_file.type.startswith('text/'):
+            return file_contents.decode('utf-8')
+        return f"[File uploaded: {uploaded_file.name}]"
+    return None
+
+# Function to get botbot response
+def get_bot_response(messages):
+    chat_completion = client.chat.completions.create(
+        messages=[
+            {"role": m["role"], "content": m["content"]} 
+            for m in messages
+        ],
+        model="mixtral-8x7b-32768",
+        temperature=0.7,
+        max_tokens=1024,
+    )
+    return chat_completion.choices[0].message.content
+
+# Toggle file upload popup
+def toggle_file_upload():
+    st.session_state.show_file_upload = not st.session_state.show_file_upload
 
 # Streamlit UI
 st.set_page_config(page_title="Chatbot", layout="wide")
 
-# Custom CSS with updated button positioning
+# Custom CSS for better UI
 st.markdown("""
 <style>
     .stButton button {
@@ -45,48 +100,43 @@ st.markdown("""
     }
     .upload-container {
         position: fixed;
-        bottom: 120px;
+        bottom: 70px;
         right: 20px;
         background: white;
         padding: 20px;
         border-radius: 10px;
         box-shadow: 0 0 10px rgba(0,0,0,0.1);
         max-width: 300px;
-        z-index: 1000;
     }
-    /* Input container styles */
-    .input-container {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 10px;
-        background: white;
+    .folder-button {
         position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        z-index: 1000;
-    }
-    /* Upload button styles */
-    .upload-button {
+        bottom: 20px;
+        right: 60px;
+        font-size: 24px;
         background: none;
         border: none;
-        font-size: 20px;
         cursor: pointer;
-        padding: 5px 10px;
-        border-radius: 5px;
-        transition: background-color 0.3s;
     }
-    .upload-button:hover {
-        background-color: #f0f0f0;
+    .folder-button:hover {
+        opacity: 0.7;
     }
-    /* Main content padding to prevent overlap with fixed input */
-    .main-content {
-        padding-bottom: 80px;
+    /* Hide Streamlit's default file uploader label */
+    .stFileUploader label {
+        display: none !important;
     }
-    /* Style for sidebar */
-    .css-1d391kg {
-        padding-bottom: 100px;
+    /* Custom styles for the upload button */
+    .stButton>button.folder-icon {
+        background: none;
+        border: none;
+        padding: 0;
+        font-size: 24px;
+        position: fixed;
+        bottom: 20px;
+        right: 60px;
+        width: auto;
+    }
+    .stButton>button.folder-icon:hover {
+        opacity: 0.7;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -119,42 +169,38 @@ st.title("💬 Chatbot")
 if st.session_state.current_chat_id is None:
     create_new_chat()
 
-# Main content with padding
-with st.container():
-    st.markdown('<div class="main-content">', unsafe_allow_html=True)
-    
-    # Display chat messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+# Display chat messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
 
-# Input area with file upload button
-cols = st.columns([0.1, 0.8, 0.1])
-with cols[0]:
-    if st.button("📁", key="folder_button"):
-        st.session_state.show_file_upload = not st.session_state.show_file_upload
-
-# File upload popup
-if st.session_state.show_file_upload:
-    with st.container():
-        st.markdown('<div class="upload-container">', unsafe_allow_html=True)
-        st.subheader("Upload File")
-        uploaded_file = st.file_uploader("Choose a file", key="file_upload")
-        if st.button("Close", key="close_upload"):
-            st.session_state.show_file_upload = False
-        st.markdown('</div>', unsafe_allow_html=True)
+# Container for file upload button and popup
+container = st.container()
+with container:
+    # File upload button
+    col1, col2 = st.columns([20, 1])
+    with col2:
+        if st.button("📁", key="folder_button", help="Upload file", type="primary", use_container_width=True):
+            st.session_state.show_file_upload = not st.session_state.show_file_upload
+    
+    # File upload popup
+    if st.session_state.show_file_upload:
+        with st.container():
+            st.markdown('<div class="upload-container">', unsafe_allow_html=True)
+            st.subheader("Upload File")
+            uploaded_file = st.file_uploader("Choose a file", key="file_upload")
+            if st.button("Close", key="close_upload"):
+                st.session_state.show_file_upload = False
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # Chat input
-with cols[1]:
-    prompt = st.chat_input("What's on your mind?")
-
-if prompt:
+if prompt := st.chat_input("What's on your mind?"):
     # Process file if uploaded
     file_content = None
     if 'file_upload' in st.session_state and st.session_state.file_upload is not None:
         file_content = process_file(st.session_state.file_upload)
+        # Clear the uploaded file after processing
+        st.session_state.file_upload = None
         st.session_state.show_file_upload = False
     
     # Combine prompt with file content if present
