@@ -18,6 +18,8 @@ if 'current_chat_id' not in st.session_state:
     st.session_state.current_chat_id = None
 if 'messages' not in st.session_state:
     st.session_state.messages = []
+if 'show_file_upload' not in st.session_state:
+    st.session_state.show_file_upload = False
 
 # Function to save chat history
 def save_chat_history():
@@ -73,8 +75,56 @@ def get_bot_response(messages):
     )
     return chat_completion.choices[0].message.content
 
+# Toggle file upload popup
+def toggle_file_upload():
+    st.session_state.show_file_upload = not st.session_state.show_file_upload
+
 # Streamlit UI
 st.set_page_config(page_title="Chatbot", layout="wide")
+
+# Custom CSS for the file upload button and popup
+st.markdown("""
+<style>
+    .stButton button {
+        width: 100%;
+        border-radius: 20px;
+        margin: 5px 0;
+    }
+    .stTextInput input {
+        border-radius: 20px;
+    }
+    .chat-message {
+        padding: 15px;
+        border-radius: 10px;
+        margin: 5px 0;
+    }
+    .file-upload-button {
+        position: absolute;
+        right: 60px;
+        bottom: 15px;
+        background: none;
+        border: none;
+        cursor: pointer;
+    }
+    .file-upload-button:hover {
+        opacity: 0.7;
+    }
+    .file-upload-popup {
+        position: fixed;
+        bottom: 80px;
+        right: 20px;
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        z-index: 1000;
+    }
+    /* Hide Streamlit's default file uploader label */
+    .stFileUploader label {
+        display: none;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Sidebar
 with st.sidebar:
@@ -109,11 +159,39 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
+# File upload button and popup
+col1, col2 = st.columns([12, 1])
+with col2:
+    st.markdown(
+        f"""
+        <button class="file-upload-button" onclick="document.getElementById('file-upload-popup').style.display='block'">
+            📁
+        </button>
+        """,
+        unsafe_allow_html=True
+    )
+
+# File upload popup
+if st.session_state.show_file_upload:
+    with st.container():
+        st.markdown(
+            """
+            <div id="file-upload-popup" class="file-upload-popup">
+                <h3>Upload File</h3>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        uploaded_file = st.file_uploader("Choose a file", key="file_upload")
+        if st.button("Close"):
+            st.session_state.show_file_upload = False
+
 # Chat input
 if prompt := st.chat_input("What's on your mind?"):
-    # File uploader
-    uploaded_file = st.file_uploader("Attach a file", key="file_upload")
-    file_content = process_file(uploaded_file) if uploaded_file else None
+    # Process file if uploaded
+    file_content = None
+    if 'file_upload' in st.session_state:
+        file_content = process_file(st.session_state.file_upload)
     
     # Combine prompt with file content if present
     full_prompt = prompt
@@ -137,21 +215,19 @@ if prompt := st.chat_input("What's on your mind?"):
     st.session_state.chats[st.session_state.current_chat_id]['messages'] = st.session_state.messages
     save_chat_history()
 
-# Custom CSS for better UI
+# JavaScript for handling popup
 st.markdown("""
-<style>
-    .stButton button {
-        width: 100%;
-        border-radius: 20px;
-        margin: 5px 0;
-    }
-    .stTextInput input {
-        border-radius: 20px;
-    }
-    .chat-message {
-        padding: 15px;
-        border-radius: 10px;
-        margin: 5px 0;
-    }
-</style>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const popup = document.getElementById('file-upload-popup');
+        const btn = document.querySelector('.file-upload-button');
+        
+        // Close popup when clicking outside
+        window.onclick = function(event) {
+            if (event.target == popup) {
+                popup.style.display = "none";
+            }
+        }
+    });
+</script>
 """, unsafe_allow_html=True)
