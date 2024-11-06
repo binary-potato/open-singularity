@@ -62,7 +62,7 @@ def process_file(uploaded_file):
         return f"[File uploaded: {uploaded_file.name}]"
     return None
 
-# Function to get botbot response
+# Function to get bot response
 def get_bot_response(messages):
     chat_completion = client.chat.completions.create(
         messages=[
@@ -75,14 +75,10 @@ def get_bot_response(messages):
     )
     return chat_completion.choices[0].message.content
 
-# Toggle file upload popup
-def toggle_file_upload():
-    st.session_state.show_file_upload = not st.session_state.show_file_upload
-
 # Streamlit UI
 st.set_page_config(page_title="Chatbot", layout="wide")
 
-# Custom CSS for better UI
+# Custom CSS
 st.markdown("""
 <style>
     .stButton button {
@@ -117,26 +113,19 @@ st.markdown("""
         border: none;
         cursor: pointer;
     }
-    .folder-button:hover {
-        opacity: 0.7;
-    }
-    /* Hide Streamlit's default file uploader label */
-    .stFileUploader label {
-        display: none !important;
-    }
     /* Custom styles for the upload button */
-    .stButton>button.folder-icon {
+    div[data-testid="stButton"] > button[kind="primary"] {
         background: none;
         border: none;
         padding: 0;
-        font-size: 24px;
+        margin: 0;
         position: fixed;
         bottom: 20px;
         right: 60px;
-        width: auto;
     }
-    .stButton>button.folder-icon:hover {
+    div[data-testid="stButton"] > button[kind="primary"]:hover {
         opacity: 0.7;
+        background: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -174,14 +163,12 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# Container for file upload button and popup
+# File upload button and popup
 container = st.container()
 with container:
     # File upload button
-    col1, col2 = st.columns([20, 1])
-    with col2:
-        if st.button("📁", key="folder_button", help="Upload file", type="primary", use_container_width=True):
-            st.session_state.show_file_upload = not st.session_state.show_file_upload
+    if st.button("📁", key="folder_button", type="primary"):
+        st.session_state.show_file_upload = not st.session_state.show_file_upload
     
     # File upload popup
     if st.session_state.show_file_upload:
@@ -199,8 +186,6 @@ if prompt := st.chat_input("What's on your mind?"):
     file_content = None
     if 'file_upload' in st.session_state and st.session_state.file_upload is not None:
         file_content = process_file(st.session_state.file_upload)
-        # Clear the uploaded file after processing
-        st.session_state.file_upload = None
         st.session_state.show_file_upload = False
     
     # Combine prompt with file content if present
