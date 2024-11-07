@@ -1,6 +1,6 @@
-# 🎈 Blank app template
+# 🎈 Open Singularity
 
-A simple Streamlit app template for you to modify!
+A simple Streamlit Chatbot based on Groq created by Assembely!
 
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://blank-app-template.streamlit.app/)
 
