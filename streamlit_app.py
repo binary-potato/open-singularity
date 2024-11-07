@@ -152,7 +152,7 @@ with st.sidebar:
             st.rerun()
 
 # Main chat interface
-st.title("💬 Chatbot")
+st.title("OpenSingularity")
 
 # Create new chat if none exists
 if st.session_state.current_chat_id is None:
