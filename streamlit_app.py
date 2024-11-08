@@ -1,6 +1,7 @@
 import streamlit as st
 from groq import Groq
 import cohere
+import google.generativeai as genai
 import uuid
 from datetime import datetime
 
@@ -9,6 +10,8 @@ groq_client = Groq(
     api_key="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"
 )
 cohere_client = cohere.Client("ROWbUII6RetAgHi2cNzzmcpmql63sE3FB3mtQVmO")
+genai.configure(api_key="AIzaSyA_lKea59nwT30YfpLbZxDKM3cAXSn4McY")
+gemini_model = genai.GenerativeModel('gemini-pro')
 
 # Initialize session state variables
 if 'chats' not in st.session_state:
@@ -56,7 +59,8 @@ def get_bot_response(messages):
             max_tokens=1024,
         )
         return chat_completion.choices[0].message.content
-    else:  # Cohere
+    
+    elif st.session_state.selected_provider == 'Cohere':
         # Convert messages to Cohere format
         chat_history = []
         for m in messages[:-1]:  # Exclude the last message
@@ -69,6 +73,17 @@ def get_bot_response(messages):
             temperature=0.7,
             max_tokens=1024
         )
+        return response.text
+    
+    else:  # Gemini
+        # Convert messages to Gemini format
+        gemini_messages = []
+        for m in messages:
+            role = "user" if m["role"] == "user" else "model"
+            gemini_messages.append({"role": role, "parts": [m["content"]]})
+        
+        chat = gemini_model.start_chat(history=gemini_messages[:-1])
+        response = chat.send_message(messages[-1]["content"])
         return response.text
 
 # Streamlit UI
@@ -132,7 +147,7 @@ with st.sidebar:
     # Model provider selection
     st.session_state.selected_provider = st.selectbox(
         "Select Model Provider",
-        ["Groq", "Cohere"],
+        ["Groq", "Cohere", "Gemini"],
         key="model_provider"
     )
     
@@ -153,8 +168,7 @@ with st.sidebar:
             st.rerun()
 
 # Main chat interface
-st.title("OpenSingularity")
-st.markdown("go to the image generation website at https://openimage.streamlit.app/, made with ❤️ by Isaac Chu")
+st.title("💬 Chatbot")
 
 # Create new chat if none exists
 if st.session_state.current_chat_id is None:
