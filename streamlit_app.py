@@ -154,6 +154,7 @@ with st.sidebar:
 
 # Main chat interface
 st.title("OpenSingularity")
+st.markdown("go to the image generation website at https://openimage.streamlit.app/")
 
 # Create new chat if none exists
 if st.session_state.current_chat_id is None:
