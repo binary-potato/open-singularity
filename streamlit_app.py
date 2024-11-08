@@ -12,7 +12,9 @@ from huggingface_hub import InferenceClient
 load_dotenv()
 
 # Initialize API clients
-groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+groq_client = Groq(
+    api_key="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"
+)
 cohere_client = cohere.Client(os.getenv('COHERE_API_KEY'))
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 gemini_model = genai.GenerativeModel('gemini-pro')
