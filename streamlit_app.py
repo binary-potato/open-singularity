@@ -1,4 +1,4 @@
-mport streamlit as st
+import streamlit as st
 from groq import Groq
 import cohere
 import google.generativeai as genai
