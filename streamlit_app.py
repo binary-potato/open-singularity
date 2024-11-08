@@ -10,8 +10,10 @@ groq_client = Groq(
     api_key="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"
 )
 cohere_client = cohere.Client("ROWbUII6RetAgHi2cNzzmcpmql63sE3FB3mtQVmO")
-genai.configure(api_key="AIzaSyA_lKea59nwT30YfpLbZxDKM3cAXSn4McY")
+genai.configure(api_key="AIzaSyD_lGJ3bvXdOZuLVbo0mfyGVAAQB0bky_Q")
 gemini_model = genai.GenerativeModel('gemini-pro')
+
+# Rest of the code remains exactly the same as before, only the API key has changed...
 
 # Initialize session state variables
 if 'chats' not in st.session_state:
