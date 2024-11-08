@@ -1,15 +1,17 @@
 import streamlit as st
 from groq import Groq
+import cohere
 import os
 from datetime import datetime
 import json
 from pathlib import Path
 import uuid
 
-# Initialize Groq client
-client = Groq(
+# Initialize API clients
+groq_client = Groq(
     api_key="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"
 )
+cohere_client = cohere.Client("ROWbUII6RetAgHi2cNzzmcpmql63sE3FB3mtQVmO")
 
 # Initialize session state variables
 if 'chats' not in st.session_state:
@@ -20,6 +22,8 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'show_file_upload' not in st.session_state:
     st.session_state.show_file_upload = False
+if 'selected_provider' not in st.session_state:
+    st.session_state.selected_provider = 'Groq'
 
 # Function to save chat history
 def save_chat_history():
@@ -48,7 +52,8 @@ def create_new_chat():
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state.chats[chat_id] = {
         'timestamp': timestamp,
-        'messages': []
+        'messages': [],
+        'provider': st.session_state.selected_provider
     }
     st.session_state.current_chat_id = chat_id
     st.session_state.messages = []
@@ -64,16 +69,31 @@ def process_file(uploaded_file):
 
 # Function to get bot response
 def get_bot_response(messages):
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {"role": m["role"], "content": m["content"]} 
-            for m in messages
-        ],
-        model="mixtral-8x7b-32768",
-        temperature=0.7,
-        max_tokens=1024,
-    )
-    return chat_completion.choices[0].message.content
+    if st.session_state.selected_provider == 'Groq':
+        chat_completion = groq_client.chat.completions.create(
+            messages=[
+                {"role": m["role"], "content": m["content"]} 
+                for m in messages
+            ],
+            model="mixtral-8x7b-32768",
+            temperature=0.7,
+            max_tokens=1024,
+        )
+        return chat_completion.choices[0].message.content
+    else:  # Cohere
+        # Convert messages to Cohere format
+        chat_history = []
+        for m in messages[:-1]:  # Exclude the last message
+            chat_history.append({"role": m["role"], "message": m["content"]})
+        
+        response = cohere_client.chat(
+            message=messages[-1]["content"],
+            chat_history=chat_history,
+            model="command",
+            temperature=0.7,
+            max_tokens=1024
+        )
+        return response.text
 
 # Streamlit UI
 st.set_page_config(page_title="Chatbot", layout="wide")
@@ -113,7 +133,6 @@ st.markdown("""
         border: none;
         cursor: pointer;
     }
-    /* Custom styles for the upload button */
     div[data-testid="stButton"] > button[kind="primary"] {
         background: none;
         border: none;
@@ -134,6 +153,13 @@ st.markdown("""
 with st.sidebar:
     st.title("💬 Chat History")
     
+    # Model provider selection
+    st.session_state.selected_provider = st.selectbox(
+        "Select Model Provider",
+        ["Groq", "Cohere"],
+        key="model_provider"
+    )
+    
     # New Chat button
     if st.button("New Chat", key="new_chat"):
         create_new_chat()
@@ -146,13 +172,15 @@ with st.sidebar:
                                    key=lambda x: x[1]['timestamp'], 
                                    reverse=True):
         timestamp = chat_data['timestamp']
-        if st.button(f"Chat from {timestamp}", key=chat_id):
+        provider = chat_data.get('provider', 'Groq')  # Default to Groq for older chats
+        if st.button(f"{provider} Chat from {timestamp}", key=chat_id):
             st.session_state.current_chat_id = chat_id
             st.session_state.messages = chat_data['messages']
+            st.session_state.selected_provider = provider
             st.rerun()
 
 # Main chat interface
-st.title("OpenSingularity")
+st.title("💬 Chatbot")
 
 # Create new chat if none exists
 if st.session_state.current_chat_id is None:
@@ -208,4 +236,5 @@ if prompt := st.chat_input("What's on your mind?"):
     
     # Update chat history
     st.session_state.chats[st.session_state.current_chat_id]['messages'] = st.session_state.messages
+    st.session_state.chats[st.session_state.current_chat_id]['provider'] = st.session_state.selected_provider
     save_chat_history()
