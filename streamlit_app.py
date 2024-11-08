@@ -1,11 +1,8 @@
 import streamlit as st
 from groq import Groq
 import cohere
-import os
-from datetime import datetime
-import json
-from pathlib import Path
 import uuid
+from datetime import datetime
 
 # Initialize API clients
 groq_client = Groq(
@@ -24,27 +21,6 @@ if 'show_file_upload' not in st.session_state:
     st.session_state.show_file_upload = False
 if 'selected_provider' not in st.session_state:
     st.session_state.selected_provider = 'Groq'
-
-# Function to save chat history
-def save_chat_history():
-    if not os.path.exists('chat_history'):
-        os.makedirs('chat_history')
-    
-    for chat_id, chat_data in st.session_state.chats.items():
-        file_path = f'chat_history/{chat_id}.json'
-        with open(file_path, 'w') as f:
-            json.dump(chat_data, f)
-
-# Function to load chat history
-def load_chat_history():
-    if not os.path.exists('chat_history'):
-        return
-    
-    for file_path in Path('chat_history').glob('*.json'):
-        with open(file_path, 'r') as f:
-            chat_data = json.load(f)
-            chat_id = file_path.stem
-            st.session_state.chats[chat_id] = chat_data
 
 # Function to create new chat
 def create_new_chat():
@@ -164,15 +140,12 @@ with st.sidebar:
     if st.button("New Chat", key="new_chat"):
         create_new_chat()
     
-    # Load existing chats
-    load_chat_history()
-    
     # Display chat history
     for chat_id, chat_data in sorted(st.session_state.chats.items(), 
                                    key=lambda x: x[1]['timestamp'], 
                                    reverse=True):
         timestamp = chat_data['timestamp']
-        provider = chat_data.get('provider', 'Groq')  # Default to Groq for older chats
+        provider = chat_data.get('provider', 'Groq')
         if st.button(f"{provider} Chat from {timestamp}", key=chat_id):
             st.session_state.current_chat_id = chat_id
             st.session_state.messages = chat_data['messages']
@@ -180,7 +153,7 @@ with st.sidebar:
             st.rerun()
 
 # Main chat interface
-st.title("💬 Chatbot")
+st.title("OpenSingularity")
 
 # Create new chat if none exists
 if st.session_state.current_chat_id is None:
@@ -234,7 +207,6 @@ if prompt := st.chat_input("What's on your mind?"):
     # Add assistant response to chat
     st.session_state.messages.append({"role": "assistant", "content": response})
     
-    # Update chat history
+    # Update current chat
     st.session_state.chats[st.session_state.current_chat_id]['messages'] = st.session_state.messages
     st.session_state.chats[st.session_state.current_chat_id]['provider'] = st.session_state.selected_provider
-    save_chat_history()
