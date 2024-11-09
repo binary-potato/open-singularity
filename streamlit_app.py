@@ -5,7 +5,38 @@ import google.generativeai as genai
 import uuid
 from datetime import datetime
 
-# Your existing API client initialization code here...
+import streamlit as st
+import os
+from groq import Groq
+import cohere
+import google.generativeai as genai
+import uuid
+from datetime import datetime
+
+# Securely get API keys from Streamlit secrets
+def initialize_api_clients():
+    # Add these to your Streamlit secrets.toml file
+    try:
+        # Initialize Groq
+        groq_client = Groq(
+            api_key=st.secrets["GROQ_API_KEY"]
+        )
+        
+        # Initialize Cohere
+        cohere_client = cohere.Client(st.secrets["COHERE_API_KEY"])
+        
+        # Initialize Google Gemini
+        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+        gemini_model = genai.GenerativeModel('gemini-pro')
+        
+        return groq_client, cohere_client, gemini_model
+    except Exception as e:
+        st.error(f"Error initializing API clients: {str(e)}")
+        return None, None, None
+
+
+# Initialize API clients
+groq_client, cohere_client, gemini_model = initialize_api_clients()
 
 # Custom CSS with gradients and modern styling
 st.markdown("""
