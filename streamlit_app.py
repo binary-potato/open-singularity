@@ -26,8 +26,14 @@ except GroqError as e:
     print("Error initializing Groq client:", e)
     groq_client = None
 
-# Initialize other API clients
-cohere_client = cohere.Client(cohere_api_key)
+# Initialize Cohere client and handle errors
+try:
+    cohere_client = cohere.Client(cohere_api_key)
+except Exception as e:
+    print("Error initializing Cohere client:", e)
+    cohere_client = None
+
+# Initialize Gemini client
 genai.configure(api_key=gemini_api_key)
 
 # Initialize session state variables
@@ -81,19 +87,22 @@ def get_bot_response(messages):
             return "Groq client could not be initialized. Please check your API key."
     
     elif st.session_state.selected_provider == 'Cohere':
-        # Convert messages to Cohere format
-        chat_history = []
-        for m in messages[:-1]:  # Exclude the last message
-            chat_history.append({"role": m["role"], "message": m["content"]})
-        
-        response = cohere_client.chat(
-            message=messages[-1]["content"],
-            chat_history=chat_history,
-            model="command",
-            temperature=0.7,
-            max_tokens=1024
-        )
-        return response.text
+        if cohere_client:
+            # Convert messages to Cohere format
+            chat_history = []
+            for m in messages[:-1]:  # Exclude the last message
+                chat_history.append({"role": m["role"], "message": m["content"]})
+            
+            response = cohere_client.chat(
+                message=messages[-1]["content"],
+                chat_history=chat_history,
+                model="command",
+                temperature=0.7,
+                max_tokens=1024
+            )
+            return response.text
+        else:
+            return "Cohere client could not be initialized. Please check your API key."
     
     else:  # Gemini
         # Convert messages to Gemini format
