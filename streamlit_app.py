@@ -11,13 +11,13 @@ from datetime import datetime
 load_dotenv()
 
 # Load API keys from environment variables
-groq_api_key = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 cohere_api_key = os.getenv("COHERE_API_KEY")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 # Initialize API clients
 groq_client = Groq(
-    api_key=groq_api_key
+    api_key=GROQ_API_KEY
 )
 cohere_client = cohere.Client(cohere_api_key)
 genai.configure(api_key=gemini_api_key)
