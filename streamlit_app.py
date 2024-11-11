@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 import streamlit as st
-from groq import Groq
+from groq import Groq, GroqError
 import cohere
 import google.generativeai as genai
 import uuid
