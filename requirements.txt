@@ -5,3 +5,5 @@ cohere>=4.43.0
 google-generativeai
 python-dotenv
 huggingface-hub
+python-dotenv
+
