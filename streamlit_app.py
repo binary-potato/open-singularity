@@ -15,8 +15,18 @@ groq_api_key = os.environ.get("GROQ_API_KEY")
 cohere_api_key = os.environ.get("COHERE_API_KEY")
 gemini_api_key = os.environ.get("GEMINI_API_KEY")
 
-# Initialize API clients
-groq_client = Groq(api_key=groq_api_key)
+print("Groq API Key:", groq_api_key)
+print("Cohere API Key:", cohere_api_key)
+print("Gemini API Key:", gemini_api_key)
+
+# Initialize Groq client and handle errors
+try:
+    groq_client = Groq(api_key=groq_api_key)
+except GroqError as e:
+    print("Error initializing Groq client:", e)
+    groq_client = None
+
+# Initialize other API clients
 cohere_client = cohere.Client(cohere_api_key)
 genai.configure(api_key=gemini_api_key)
 
@@ -56,16 +66,19 @@ def process_file(uploaded_file):
 # Function to get bot response
 def get_bot_response(messages):
     if st.session_state.selected_provider == 'Groq':
-        chat_completion = groq_client.chat.completions.create(
-            messages=[
-                {"role": m["role"], "content": m["content"]} 
-                for m in messages
-            ],
-            model="mixtral-8x7b-32768",
-            temperature=0.7,
-            max_tokens=1024,
-        )
-        return chat_completion.choices[0].message.content
+        if groq_client:
+            chat_completion = groq_client.chat.completions.create(
+                messages=[
+                    {"role": m["role"], "content": m["content"]} 
+                    for m in messages
+                ],
+                model="mixtral-8x7b-32768",
+                temperature=0.7,
+                max_tokens=1024,
+            )
+            return chat_completion.choices[0].message.content
+        else:
+            return "Groq client could not be initialized. Please check your API key."
     
     elif st.session_state.selected_provider == 'Cohere':
         # Convert messages to Cohere format
