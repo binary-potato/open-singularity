@@ -1,40 +1,17 @@
-import os
-from dotenv import load_dotenv
 import streamlit as st
-from groq import Groq, GroqError
+from groq import Groq
 import cohere
 import google.generativeai as genai
 import uuid
 from datetime import datetime
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Load API keys from environment variables
-groq_api_key = os.environ.get("GROQ_API_KEY")
-cohere_api_key = os.environ.get("COHERE_API_KEY")
-gemini_api_key = os.environ.get("GEMINI_API_KEY")
-
-print("Groq API Key:", groq_api_key)
-print("Cohere API Key:", cohere_api_key)
-print("Gemini API Key:", gemini_api_key)
-
-# Initialize Groq client and handle errors
-try:
-    groq_client = Groq(api_key=groq_api_key)
-except GroqError as e:
-    print("Error initializing Groq client:", e)
-    groq_client = None
-
-# Initialize Cohere client and handle errors
-try:
-    cohere_client = cohere.Client(cohere_api_key)
-except Exception as e:
-    print("Error initializing Cohere client:", e)
-    cohere_client = None
-
-# Initialize Gemini client
-genai.configure(api_key=gemini_api_key)
+# Initialize API clients
+groq_client = Groq(
+    api_key="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"
+)
+cohere_client = cohere.Client("ROWbUII6RetAgHi2cNzzmcpmql63sE3FB3mtQVmO")
+genai.configure(api_key="AIzaSyD_lGJ3bvXdOZuLVbo0mfyGVAAQB0bky_Q")
+gemini_model = genai.GenerativeModel('gemini-pro')
 
 # Initialize session state variables
 if 'chats' not in st.session_state:
@@ -72,37 +49,31 @@ def process_file(uploaded_file):
 # Function to get bot response
 def get_bot_response(messages):
     if st.session_state.selected_provider == 'Groq':
-        if groq_client:
-            chat_completion = groq_client.chat.completions.create(
-                messages=[
-                    {"role": m["role"], "content": m["content"]} 
-                    for m in messages
-                ],
-                model="mixtral-8x7b-32768",
-                temperature=0.7,
-                max_tokens=1024,
-            )
-            return chat_completion.choices[0].message.content
-        else:
-            return "Groq client could not be initialized. Please check your API key."
+        chat_completion = groq_client.chat.completions.create(
+            messages=[
+                {"role": m["role"], "content": m["content"]} 
+                for m in messages
+            ],
+            model="mixtral-8x7b-32768",
+            temperature=0.7,
+            max_tokens=1024,
+        )
+        return chat_completion.choices[0].message.content
     
     elif st.session_state.selected_provider == 'Cohere':
-        if cohere_client:
-            # Convert messages to Cohere format
-            chat_history = []
-            for m in messages[:-1]:  # Exclude the last message
-                chat_history.append({"role": m["role"], "message": m["content"]})
-            
-            response = cohere_client.chat(
-                message=messages[-1]["content"],
-                chat_history=chat_history,
-                model="command",
-                temperature=0.7,
-                max_tokens=1024
-            )
-            return response.text
-        else:
-            return "Cohere client could not be initialized. Please check your API key."
+        # Convert messages to Cohere format
+        chat_history = []
+        for m in messages[:-1]:  # Exclude the last message
+            chat_history.append({"role": m["role"], "message": m["content"]})
+        
+        response = cohere_client.chat(
+            message=messages[-1]["content"],
+            chat_history=chat_history,
+            model="command",
+            temperature=0.7,
+            max_tokens=1024
+        )
+        return response.text
     
     else:  # Gemini
         # Convert messages to Gemini format
@@ -254,4 +225,3 @@ if prompt := st.chat_input("What's on your mind?"):
     # Update current chat
     st.session_state.chats[st.session_state.current_chat_id]['messages'] = st.session_state.messages
     st.session_state.chats[st.session_state.current_chat_id]['provider'] = st.session_state.selected_provider
-
