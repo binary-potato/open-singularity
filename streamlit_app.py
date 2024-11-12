@@ -10,13 +10,27 @@ from dotenv import load_dotenv
 # Load environment variables from the .env file
 load_dotenv("apis.env")
 
-# Initialize API clients with environment variables directly in each constructor
-groq_client = Groq(
-    api_key=os.getenv("GROQ_API_KEY")
-)
+# Initialize API clients with environment variables
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 cohere_client = cohere.Client(os.getenv("COHERE_API_KEY"))
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 gemini_model = genai.GenerativeModel('gemini-pro')
+
+# Additional API keys
+openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+llama_api_key = os.getenv("LLAMA_API_KEY")
+mistral_api_key = os.getenv("MISTRAL_API_KEY")
+stable_diffusion_api_key = os.getenv("STABLE_DIFFUSION_API_KEY")
+huggingface_api_key = os.getenv("HUGGINGFACE_API_KEY")
+
+# Example placeholders for API clients (assuming you’d implement them)
+# openrouter_client = OpenRouterClient(api_key=openrouter_api_key)
+# anthropic_client = AnthropicClient(api_key=anthropic_api_key)
+# llama_client = LlamaClient(api_key=llama_api_key)
+# mistral_client = MistralClient(api_key=mistral_api_key)
+# stable_diffusion_client = StableDiffusionClient(api_key=stable_diffusion_api_key)
+# huggingface_client = HuggingFaceClient(api_key=huggingface_api_key)
 
 # Initialize session state variables
 if 'chats' not in st.session_state:
