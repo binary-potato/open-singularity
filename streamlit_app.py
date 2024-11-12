@@ -254,4 +254,4 @@ if prompt := st.chat_input("What's on your mind?"):
     # Update current chat
     st.session_state.chats[st.session_state.current_chat_id]['messages'] = st.session_state.messages
     st.session_state.chats[st.session_state.current_chat_id]['provider'] = st.session_state.selected_provider
-""", unsafe_allow_html=True)
+
