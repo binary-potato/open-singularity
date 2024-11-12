@@ -4,13 +4,18 @@ import cohere
 import google.generativeai as genai
 import uuid
 from datetime import datetime
+import os
+from dotenv import load_dotenv
 
-# Initialize API clients
+# Load environment variables from the .env file
+load_dotenv("apis.env")
+
+# Initialize API clients with environment variables directly in each constructor
 groq_client = Groq(
-    api_key="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"
+    api_key=os.getenv("GROQ_API_KEY")
 )
-cohere_client = cohere.Client("ROWbUII6RetAgHi2cNzzmcpmql63sE3FB3mtQVmO")
-genai.configure(api_key="AIzaSyD_lGJ3bvXdOZuLVbo0mfyGVAAQB0bky_Q")
+cohere_client = cohere.Client(os.getenv("COHERE_API_KEY"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 gemini_model = genai.GenerativeModel('gemini-pro')
 
 # Initialize session state variables
